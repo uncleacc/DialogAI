@@ -1,0 +1,31 @@
+{
+  "name": "dialogai-client",
+  "version": "1.0.0",
+  "description": "DialogAI前端客户端 - 现代化AI对话界面",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore"
+  },
+  "dependencies": {
+    "vue": "^3.3.4",
+    "vue-router": "^4.2.4",
+    "pinia": "^2.1.6",
+    "axios": "^1.4.0",
+    "marked": "^5.1.1",
+    "highlight.js": "^11.9.0",
+    "lucide-vue-next": "^0.263.0",
+    "vue-typer": "^1.0.0",
+    "dayjs": "^1.11.9"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.2.3",
+    "vite": "^4.4.5",
+    "eslint": "^8.45.0",
+    "eslint-plugin-vue": "^9.15.1",
+    "@vue/eslint-config-prettier": "^8.0.0",
+    "prettier": "^3.0.0",
+    "sass": "^1.64.1"
+  }
+} 
