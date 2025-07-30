@@ -18,6 +18,8 @@
           <span class="chat-subtitle">智能对话助手</span>
         </div>
         <div class="header-right">
+          <button @click="testReactiveUpdate" class="test-btn">测试响应式</button>
+          <button @click="testStreamRequest" class="test-btn">测试流式</button>
           <ThemeToggle />
         </div>
       </div>
@@ -65,7 +67,13 @@ export default {
     
     // 方法
     const sendMessage = async (content) => {
-      await chatStore.sendMessage(content)
+      console.log('[ChatView] 开始发送消息:', content);
+      try {
+        await chatStore.sendMessageStream(content);
+        console.log('[ChatView] 消息发送完成');
+      } catch (error) {
+        console.error('[ChatView] 消息发送失败:', error);
+      }
     }
     
     const selectConversation = async (conversationId) => {
@@ -112,6 +120,14 @@ export default {
       }
     }
     
+    const testReactiveUpdate = () => {
+      chatStore.testReactiveUpdate()
+    }
+    
+    const testStreamRequest = () => {
+      chatStore.testStreamRequest()
+    }
+    
     // 初始化
     onMounted(async () => {
       await chatStore.loadConversations()
@@ -126,7 +142,9 @@ export default {
       selectConversation,
       newConversation,
       deleteConversation,
-      regenerateMessage
+      regenerateMessage,
+      testReactiveUpdate,
+      testStreamRequest
     }
   }
 }
@@ -178,6 +196,21 @@ export default {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.test-btn {
+  padding: 8px 16px;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+}
+
+.test-btn:hover {
+  background-color: #0d9488;
 }
 
 /* 响应式设计 */

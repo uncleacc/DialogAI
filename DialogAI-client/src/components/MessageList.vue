@@ -36,6 +36,10 @@
           :message="message"
           @regenerate="$emit('regenerate', message.id)"
         />
+        <!-- 调试信息 -->
+        <div v-if="message.role === 'ASSISTANT'" class="debug-info" style="font-size: 12px; color: #666; margin-top: 4px;">
+          消息ID: {{ message.id }}, 内容长度: {{ message.content.length }}
+        </div>
       </div>
       
       <!-- 加载状态 -->
@@ -99,6 +103,12 @@ export default {
     // 监听消息变化，自动滚动
     watch(() => props.messages.length, scrollToBottom)
     watch(() => props.isLoading, scrollToBottom)
+    
+    // 监听消息内容变化，确保流式更新时能实时显示
+    watch(() => props.messages, () => {
+      console.log('[MessageList] 消息列表变化，触发滚动');
+      scrollToBottom()
+    }, { deep: true })
     
     return {
       messageListRef,

@@ -64,10 +64,24 @@ export default {
     const isUser = computed(() => props.message.role === 'USER')
     
     const renderedContent = computed(() => {
+      console.log('[MessageItem] 重新计算renderedContent:', {
+        messageId: props.message.id,
+        content: props.message.content,
+        role: props.message.role,
+        isStreaming: props.message.isStreaming
+      });
+      
       if (isUser.value) {
         return props.message.content
       } else {
-        return renderMarkdown(props.message.content)
+        // 如果消息正在流式输出，显示纯文本避免markdown渲染问题
+        if (props.message.isStreaming) {
+          // 对纯文本进行简单的换行处理
+          return props.message.content.replace(/\n/g, '<br>')
+        } else {
+          // 流式完成后才进行完整的markdown渲染
+          return renderMarkdown(props.message.content)
+        }
       }
     })
     
