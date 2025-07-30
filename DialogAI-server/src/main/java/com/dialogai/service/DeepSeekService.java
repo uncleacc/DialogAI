@@ -21,6 +21,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import org.apache.hc.core5.http.ClassicHttpResponse;
+import org.apache.hc.core5.http.io.entity.StringEntity;
 
 /**
  * DeepSeek API服务
@@ -65,6 +71,74 @@ public class DeepSeekService {
         } catch (Exception e) {
             log.error("调用DeepSeek API时发生错误", e);
             throw new RuntimeException("AI服务暂时不可用，请稍后重试");
+        }
+    }
+
+    /**
+     * 流式对接AI接口，逐步推送内容到回调
+     */
+    public void streamChat(ChatRequestDto request, Consumer<String> onData) {
+        try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
+            HttpPost httpPost = new HttpPost(deepSeekConfig.getBaseUrl() + "/v1/chat/completions");
+            httpPost.setHeader("Authorization", "Bearer " + deepSeekConfig.getApiKey());
+            httpPost.setHeader("Content-Type", "application/json");
+            httpPost.setHeader("Accept", "text/event-stream");
+            httpPost.setHeader("Cache-Control", "no-cache");
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("model", deepSeekConfig.getModel());
+            body.put("messages", buildMessagesFromRequest(request));
+            body.put("stream", true);
+            body.put("temperature", 0.7);
+
+            StringEntity entity = new StringEntity(objectMapper.writeValueAsString(body), StandardCharsets.UTF_8);
+            httpPost.setEntity(entity);
+
+            log.info("[DeepSeek] 开始流式请求");
+            try (CloseableHttpResponse response = httpClient.execute(httpPost)) {
+                log.info("[DeepSeek] 收到响应，状态码: {}", response.getCode());
+                
+                try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(response.getEntity().getContent(), StandardCharsets.UTF_8))) {
+                    
+                    String line;
+                    int chunkCount = 0;
+                    while ((line = reader.readLine()) != null) {
+                        chunkCount++;
+                        log.debug("[DeepSeek] 读取行 {}: {}", chunkCount, line);
+                        
+                        if (line.startsWith("data:")) {
+                            String jsonData = line.substring(5).trim();
+                            log.debug("[DeepSeek] 提取数据: {}", jsonData);
+                            
+                            if ("[DONE]".equals(jsonData)) {
+                                log.info("[DeepSeek] 流式响应完成");
+                                break;
+                            }
+                            
+                            if (!jsonData.isEmpty()) {
+                                try {
+                                    JsonNode node = objectMapper.readTree(jsonData);
+                                    JsonNode deltaNode = node.at("/choices/0/delta/content");
+                                    if (deltaNode != null && !deltaNode.isNull() && !deltaNode.isMissingNode()) {
+                                        String content = deltaNode.asText();
+                                        if (!content.isEmpty()) {
+                                            log.debug("[DeepSeek] 回调内容: {}", content);
+                                            onData.accept(content);
+                                        }
+                                    }
+                                } catch (Exception e) {
+                                    log.warn("[DeepSeek] 解析JSON失败: {}, 原始数据: {}", e.getMessage(), jsonData);
+                                }
+                            }
+                        }
+                    }
+                    log.info("[DeepSeek] 流式读取完成，总行数: {}", chunkCount);
+                }
+            }
+        } catch (Exception e) {
+            log.error("[DeepSeek] 流式接口调用失败", e);
+            throw new RuntimeException("AI流式接口调用失败: " + e.getMessage(), e);
         }
     }
 
@@ -128,5 +202,17 @@ public class DeepSeekService {
         }
         
         throw new RuntimeException("无法解析DeepSeek API响应");
+    }
+
+    private List<Map<String, String>> buildMessagesFromRequest(ChatRequestDto request) {
+        List<Map<String, String>> messages = new ArrayList<>();
+        // 这里可以加入历史消息的逻辑
+        // for (Message message : conversationHistory) { ... }
+
+        Map<String, String> userMsg = new HashMap<>();
+        userMsg.put("role", "user");
+        userMsg.put("content", request.getMessage());
+        messages.add(userMsg);
+        return messages;
     }
 } 

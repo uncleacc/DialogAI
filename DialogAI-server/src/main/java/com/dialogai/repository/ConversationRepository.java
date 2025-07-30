@@ -55,4 +55,9 @@ public interface ConversationRepository extends JpaRepository<Conversation, Long
      * 根据会话ID和用户ID查找会话
      */
     Optional<Conversation> findByIdAndUserId(Long id, String userId);
+
+    /**
+     * 根据用户ID和状态查找会话列表，排除 DELETED 状态
+     */
+    List<Conversation> findByUserIdAndStatusNotOrderByUpdatedAtDesc(String userId, Conversation.ConversationStatus status);
 } 

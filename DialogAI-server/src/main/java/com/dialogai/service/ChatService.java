@@ -9,11 +9,16 @@ import com.dialogai.entity.Message;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -84,6 +89,119 @@ public class ChatService {
         }
 
         return response;
+    }
+
+    /**
+     * 处理流式AI对话请求，异步推送AI回复到SseEmitter
+     */
+    @Async
+    public void processStreamingChatRequest(ChatRequestDto request, SseEmitter emitter) {
+        try {
+            log.info("[流式请求] 收到请求: userId={}, message={}, conversationId={}", request.getUserId(), request.getMessage(), request.getConversationId());
+            // 1. 检查/创建会话
+            Long conversationId = request.getConversationId();
+            if (conversationId == null) {
+                ConversationDto conv = conversationService.createConversation("新对话", "", request.getUserId());
+                conversationId = conv.getId();
+                log.info("[流式请求] 新建会话: conversationId={}", conversationId);
+            } else {
+                log.info("[流式请求] 使用已有会话: conversationId={}", conversationId);
+            }
+
+            // 2. 保存用户消息
+            messageService.saveUserMessage(conversationId, request.getMessage());
+            log.info("[流式请求] 已保存用户消息: conversationId={}, message={}", conversationId, request.getMessage());
+
+            // 3. 流式获取AI回复
+            StringBuilder aiReply = new StringBuilder();
+            Consumer<String> streamCallback = chunk -> {
+                try {
+                    aiReply.append(chunk);
+                    // 使用正确的SSE格式并强制flush
+                    emitter.send(SseEmitter.event()
+                        .name("chunk")
+                        .data(chunk)
+                        .id(String.valueOf(System.currentTimeMillis())));
+                    log.info("[流式请求] 推送AI回复分片: {}", chunk);
+                } catch (IOException e) {
+                    log.error("[流式请求] 推送AI分片出错", e);
+                    emitter.completeWithError(e);
+                }
+            };
+
+            // 4. 调用DeepSeekService的流式方法
+            deepSeekService.streamChat(request, streamCallback);
+            log.info("[流式请求] AI回复流式推送完成: conversationId={}", conversationId);
+
+            // 5. 保存AI回复消息
+            messageService.saveAiMessage(conversationId, aiReply.toString());
+            log.info("[流式请求] 已保存AI消息: conversationId={}, aiReply={}", conversationId, aiReply);
+
+            // 6. 可选：更新会话描述和更新时间
+            // conversationService.updateDescription(conversationId, aiReply.toString());
+
+            // 7. 结束推送
+            emitter.complete();
+            log.info("[流式请求] SSE推送完成: conversationId={}", conversationId);
+        } catch (Exception e) {
+            log.error("[流式请求] 处理异常", e);
+            emitter.completeWithError(e);
+        }
+    }
+
+    /**
+     * 处理流式AI对话请求，直接写入PrintWriter确保实时性
+     */
+    public void processStreamingChatRequestDirect(ChatRequestDto request, PrintWriter writer) {
+        try {
+            log.info("[流式请求] 收到请求: userId={}, message={}, conversationId={}", request.getUserId(), request.getMessage(), request.getConversationId());
+            
+            // 1. 检查/创建会话
+            Long conversationId = request.getConversationId();
+            if (conversationId == null) {
+                ConversationDto conv = conversationService.createConversation("新对话", "", request.getUserId());
+                conversationId = conv.getId();
+                log.info("[流式请求] 新建会话: conversationId={}", conversationId);
+            } else {
+                log.info("[流式请求] 使用已有会话: conversationId={}", conversationId);
+            }
+
+            // 2. 保存用户消息
+            messageService.saveUserMessage(conversationId, request.getMessage());
+            log.info("[流式请求] 已保存用户消息: conversationId={}, message={}", conversationId, request.getMessage());
+
+            // 3. 流式获取AI回复
+            StringBuilder aiReply = new StringBuilder();
+            Consumer<String> streamCallback = chunk -> {
+                try {
+                    aiReply.append(chunk);
+                    // 直接写入并立即flush
+                    writer.write("data: " + chunk + "\n\n");
+                    writer.flush();
+                    log.info("[流式请求] 直接推送AI回复分片: {}", chunk);
+                } catch (Exception e) {
+                    log.error("[流式请求] 推送AI分片出错", e);
+                }
+            };
+
+            // 4. 调用DeepSeekService的流式方法
+            deepSeekService.streamChat(request, streamCallback);
+            log.info("[流式请求] AI回复流式推送完成: conversationId={}", conversationId);
+
+            // 5. 保存AI回复消息
+            messageService.saveAiMessage(conversationId, aiReply.toString());
+            log.info("[流式请求] 已保存AI消息: conversationId={}, aiReply长度={}", conversationId, aiReply.length());
+
+            log.info("[流式请求] 直接流式处理完成: conversationId={}", conversationId);
+        } catch (Exception e) {
+            log.error("[流式请求] 处理异常", e);
+            try {
+                writer.write("data: 处理出错: " + e.getMessage() + "\n\n");
+                writer.flush();
+            } catch (Exception ex) {
+                log.error("写入错误消息失败", ex);
+            }
+        }
     }
 
     /**

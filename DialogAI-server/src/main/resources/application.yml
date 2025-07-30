@@ -2,14 +2,26 @@ server:
   port: 8080
   servlet:
     context-path: /api
+  # 禁用Tomcat的响应缓冲
+  tomcat:
+    connection-timeout: 60000
+    max-connections: 1000
+  # 设置响应压缩相关配置
+  compression:
+    enabled: false # 对于SSE禁用压缩
 
 spring:
   application:
     name: dialog-ai-backend
   
+  # MVC配置 - 禁用异步请求的超时
+  mvc:
+    async:
+      request-timeout: 60000
+  
   # 数据库配置
   datasource:
-    url: jdbc:mysql://localhost:3306/dialog_ai?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:3306/dialog_ai?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
     password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -18,7 +30,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
@@ -52,7 +64,7 @@ logging:
   level:
     com.dialogai: DEBUG
     org.springframework.web: INFO
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.hibernate.SQL: OFF
+    org.hibernate.type.descriptor.sql.BasicBinder: OFF
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n" 

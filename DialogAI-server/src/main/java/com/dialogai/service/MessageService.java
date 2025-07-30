@@ -80,7 +80,7 @@ public class MessageService {
     /**
      * 获取会话的所有消息
      */
-    @Cacheable(value = "messages", key = "#conversationId")
+    // @Cacheable(value = "messages", key = "#conversationId")
     public List<MessageDto> getMessagesByConversationId(Long conversationId) {
         return messageRepository.findByConversationIdOrderBySequenceNumberAsc(conversationId)
                 .stream()
@@ -119,7 +119,7 @@ public class MessageService {
      * 删除消息
      */
     @Transactional
-    @CacheEvict(value = "messages", key = "#conversationId")
+    // @CacheEvict(value = "messages", key = "#conversationId")
     public boolean deleteMessage(Long id, Long conversationId) {
         Optional<Message> messageOpt = messageRepository.findById(id);
         if (messageOpt.isPresent()) {

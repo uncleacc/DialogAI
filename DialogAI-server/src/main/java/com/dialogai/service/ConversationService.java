@@ -52,7 +52,7 @@ public class ConversationService {
     /**
      * 根据ID获取会话
      */
-    @Cacheable(value = "conversations", key = "#id")
+    // @Cacheable(value = "conversations", key = "#id")
     public Optional<ConversationDto> getConversationById(Long id) {
         return conversationRepository.findById(id)
                 .map(ConversationDto::fromEntity);
@@ -70,7 +70,7 @@ public class ConversationService {
      * 获取用户的所有会话
      */
     public List<ConversationDto> getConversationsByUserId(String userId) {
-        return conversationRepository.findByUserIdOrderByUpdatedAtDesc(userId)
+        return conversationRepository.findByUserIdAndStatusNotOrderByUpdatedAtDesc(userId, Conversation.ConversationStatus.DELETED)
                 .stream()
                 .map(ConversationDto::fromEntity)
                 .collect(Collectors.toList());
@@ -88,7 +88,7 @@ public class ConversationService {
      * 更新会话标题
      */
     @Transactional
-    @CacheEvict(value = "conversations", key = "#id")
+    // @CacheEvict(value = "conversations", key = "#id")
     public Optional<ConversationDto> updateConversationTitle(Long id, String title, String userId) {
         return conversationRepository.findByIdAndUserId(id, userId)
                 .map(conversation -> {
@@ -104,7 +104,7 @@ public class ConversationService {
      * 归档会话
      */
     @Transactional
-    @CacheEvict(value = "conversations", key = "#id")
+    // @CacheEvict(value = "conversations", key = "#id")
     public Optional<ConversationDto> archiveConversation(Long id, String userId) {
         return conversationRepository.findByIdAndUserId(id, userId)
                 .map(conversation -> {
@@ -120,7 +120,7 @@ public class ConversationService {
      * 删除会话（软删除）
      */
     @Transactional
-    @CacheEvict(value = "conversations", key = "#id")
+    // @CacheEvict(value = "conversations", key = "#id")
     public Optional<ConversationDto> deleteConversation(Long id, String userId) {
         return conversationRepository.findByIdAndUserId(id, userId)
                 .map(conversation -> {
