@@ -8,18 +8,46 @@ export const useChatStore = defineStore('chat', () => {
   const currentConversationId = ref(null)
   const isLoading = ref(false)
   const error = ref(null)
+  const isNewConversationMode = ref(false) // 新增：新会话模式状态
   
   // 计算属性
   const currentMessages = computed(() => {
-    if (!currentConversationId.value) return []
+    if (!currentConversationId.value && !isNewConversationMode.value) return []
+    if (isNewConversationMode.value) {
+      // 在新会话模式下，显示临时消息
+      return messages.value.filter(msg => msg.conversationId === 'new-conversation-temp')
+    }
     return messages.value.filter(msg => msg.conversationId === currentConversationId.value)
   })
+  
+  // 开始新会话模式（不立即创建会话）
+  const startNewConversation = () => {
+    console.log('[Chat Store] 开始新会话模式')
+    currentConversationId.value = null
+    isNewConversationMode.value = true
+    // 清空当前显示的消息，但不影响其他会话的消息
+    messages.value = messages.value.filter(msg => msg.conversationId !== 'new-conversation-temp')
+  }
   
   // 发送消息
   const sendMessage = async (content, userId = 'default-user') => {
     try {
       isLoading.value = true
       error.value = null
+
+      // 如果是新会话模式，先创建临时用户消息
+      if (isNewConversationMode.value) {
+        const tempUserMsg = {
+          id: 'temp-user-' + Date.now(),
+          content: content,
+          role: 'USER',
+          status: 'SENT',
+          sequenceNumber: 1,
+          conversationId: 'new-conversation-temp',
+          createdAt: new Date().toISOString()
+        }
+        messages.value.push(tempUserMsg)
+      }
 
       // 只在有会话ID时才传 conversationId
       const data = {
@@ -33,7 +61,15 @@ export const useChatStore = defineStore('chat', () => {
       const response = await chatApi.sendMessage(data)
       
       if (response.success) {
-        // 添加用户消息
+        // 如果是新会话模式，需要替换临时消息
+        if (isNewConversationMode.value) {
+          // 移除临时消息
+          messages.value = messages.value.filter(msg => msg.conversationId !== 'new-conversation-temp')
+          isNewConversationMode.value = false
+          currentConversationId.value = response.conversationId
+        }
+        
+        // 添加真实的用户消息
         messages.value.push({
           id: response.userMessage.id,
           content: content,
@@ -66,6 +102,11 @@ export const useChatStore = defineStore('chat', () => {
     } catch (err) {
       error.value = err.message || '发送消息失败'
       console.error('发送消息错误:', err)
+      
+      // 发送失败时，如果是新会话模式，清理临时消息
+      if (isNewConversationMode.value) {
+        messages.value = messages.value.filter(msg => msg.conversationId !== 'new-conversation-temp')
+      }
     } finally {
       isLoading.value = false
     }
@@ -75,18 +116,28 @@ export const useChatStore = defineStore('chat', () => {
   const sendMessageStream = async (content, userId = 'default-user') => {
     // 累积内容
     let accumulatedContent = '';
-    console.log('[埋点] 开始流式发送消息:', { content, userId, currentConversationId: currentConversationId.value });
+    console.log('[埋点] 开始流式发送消息:', { content, userId, currentConversationId: currentConversationId.value, isNewConversationMode: isNewConversationMode.value });
     isLoading.value = true
     error.value = null
+    
     try {
       // 1. 先插入用户消息
+      let userMsgConversationId = currentConversationId.value
+      let aiMsgConversationId = currentConversationId.value
+      
+      // 如果是新会话模式，使用临时ID
+      if (isNewConversationMode.value) {
+        userMsgConversationId = 'new-conversation-temp'
+        aiMsgConversationId = 'new-conversation-temp'
+      }
+      
       const userMsg = {
         id: Date.now() - 1,
         content: content,
         role: 'USER',
         status: 'SENT',
         sequenceNumber: messages.value.length + 1,
-        conversationId: currentConversationId.value,
+        conversationId: userMsgConversationId,
         createdAt: new Date().toISOString()
       };
       
@@ -98,7 +149,7 @@ export const useChatStore = defineStore('chat', () => {
         role: 'ASSISTANT',
         status: 'SENT',
         sequenceNumber: messages.value.length + 2,
-        conversationId: currentConversationId.value,
+        conversationId: aiMsgConversationId,
         createdAt: new Date().toISOString()
       }
       console.log('[埋点] 创建AI消息对象:', aiMsg);
@@ -229,8 +280,25 @@ export const useChatStore = defineStore('chat', () => {
       await loadConversations(userId)
       console.log('[埋点] 会话列表刷新完成，会话数量:', conversations.value.length);
       
-      // 如果是新会话，需要更新当前会话ID
-      if (!currentConversationId.value && conversations.value.length > 0) {
+      // 处理新会话模式的ID更新
+      if (isNewConversationMode.value && conversations.value.length > 0) {
+        // 获取最新创建的会话ID（通常是列表第一个）
+        const newConversationId = conversations.value[0].id;
+        console.log('[埋点] 新会话创建，会话ID:', newConversationId);
+        
+        // 更新临时消息的conversationId为真实ID
+        messages.value = messages.value.map(msg => {
+          if (msg.conversationId === 'new-conversation-temp') {
+            return { ...msg, conversationId: newConversationId };
+          }
+          return msg;
+        });
+        
+        // 退出新会话模式，设置当前会话ID
+        isNewConversationMode.value = false;
+        currentConversationId.value = newConversationId;
+        console.log('[埋点] 新会话模式结束，当前会话ID:', currentConversationId.value);
+      } else if (!currentConversationId.value && conversations.value.length > 0) {
         currentConversationId.value = conversations.value[0].id;
         console.log('[埋点] 更新当前会话ID:', currentConversationId.value);
       }
@@ -238,6 +306,12 @@ export const useChatStore = defineStore('chat', () => {
       console.error('[埋点] 流式发送消息异常:', err);
       error.value = err.message || '发送消息失败';
       console.error('流式发送消息错误:', err);
+      
+      // 发送失败时，如果是新会话模式，清理临时消息
+      if (isNewConversationMode.value) {
+        messages.value = messages.value.filter(msg => msg.conversationId !== 'new-conversation-temp')
+        isNewConversationMode.value = false
+      }
     } finally {
       console.log('[埋点] 流式发送消息完成，设置loading为false');
       isLoading.value = false;
@@ -259,6 +333,7 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const response = await chatApi.getConversation(conversationId, userId)
       currentConversationId.value = conversationId
+      isNewConversationMode.value = false // 退出新会话模式
       
       // 更新消息列表
       const conversationMessages = response.messages || []
@@ -272,12 +347,13 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
   
-  // 创建新会话
+  // 创建新会话（保留原有方法，用于其他地方可能的调用）
   const createConversation = async (title, description = '', userId = 'default-user') => {
     try {
       const response = await chatApi.createConversation(title, description, userId)
       conversations.value.unshift(response)
       currentConversationId.value = response.id
+      isNewConversationMode.value = false // 退出新会话模式
       return response
     } catch (err) {
       console.error('创建会话错误:', err)
@@ -288,7 +364,8 @@ export const useChatStore = defineStore('chat', () => {
   // 清空当前会话
   const clearCurrentConversation = () => {
     currentConversationId.value = null
-    messages.value = messages.value.filter(msg => msg.conversationId !== currentConversationId.value)
+    isNewConversationMode.value = false
+    messages.value = messages.value.filter(msg => msg.conversationId !== currentConversationId.value && msg.conversationId !== 'new-conversation-temp')
   }
   
   // 删除会话
@@ -302,6 +379,25 @@ export const useChatStore = defineStore('chat', () => {
       }
     } catch (err) {
       console.error('删除会话错误:', err)
+      throw err
+    }
+  }
+  
+  // 重命名会话
+  const renameConversation = async (conversationId, newTitle, userId = 'default-user') => {
+    try {
+      await chatApi.updateConversationTitle(conversationId, newTitle, userId)
+      
+      // 更新本地会话列表中的标题
+      const conversationIndex = conversations.value.findIndex(conv => conv.id === conversationId)
+      if (conversationIndex !== -1) {
+        conversations.value[conversationIndex] = {
+          ...conversations.value[conversationIndex],
+          title: newTitle
+        }
+      }
+    } catch (err) {
+      console.error('重命名会话错误:', err)
       throw err
     }
   }
@@ -433,13 +529,16 @@ export const useChatStore = defineStore('chat', () => {
     currentConversationId,
     isLoading,
     error,
+    isNewConversationMode,
     currentMessages,
     sendMessage,
     loadConversations,
     loadConversation,
     createConversation,
+    startNewConversation, // 新增方法
     clearCurrentConversation,
     deleteConversation,
+    renameConversation, // 新增重命名方法
     sendMessageStream,
     testReactiveUpdate,
     testStreamRequest

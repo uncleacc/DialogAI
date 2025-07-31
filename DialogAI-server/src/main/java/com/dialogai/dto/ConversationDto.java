@@ -36,7 +36,17 @@ public class ConversationDto {
         dto.setStatus(conversation.getStatus());
         dto.setCreatedAt(conversation.getCreatedAt());
         dto.setUpdatedAt(conversation.getUpdatedAt());
-        dto.setMessageCount(conversation.getMessages() != null ? conversation.getMessages().size() : 0);
+        // 移除直接访问懒加载集合，messageCount将在需要时单独设置
+        dto.setMessageCount(0);
+        return dto;
+    }
+
+    /**
+     * 从实体转换为DTO（包含消息数量）
+     */
+    public static ConversationDto fromEntityWithMessageCount(Conversation conversation, Integer messageCount) {
+        ConversationDto dto = fromEntity(conversation);
+        dto.setMessageCount(messageCount != null ? messageCount : 0);
         return dto;
     }
 } 

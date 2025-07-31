@@ -1054,4 +1054,201 @@ public class HealthCheckController {
 4. **扩展性**: 支持项目未来的功能扩展
 5. **AI友好**: 便于AI辅助开发和代码生成
 
-建议开发团队严格遵循这些规范，并根据项目发展的实际需要适时更新和完善规范内容。 
+建议开发团队严格遵循这些规范，并根据项目发展的实际需要适时更新和完善规范内容。
+
+## 12. 数据库自动初始化
+
+### 12.1 自动初始化功能
+
+DialogAI项目已实现完整的数据库自动初始化功能：
+
+#### 12.1.1 核心特性
+- **自动创建数据库**：通过JDBC URL参数`createDatabaseIfNotExist=true`自动创建数据库
+- **自动创建表结构**：使用Hibernate DDL功能自动创建和更新表结构
+- **多环境支持**：开发、测试、生产环境的不同配置策略
+- **初始化数据**：自动插入系统配置和欢迎数据
+- **健康检查**：提供数据库连接和业务数据健康检查接口
+
+#### 12.1.2 配置示例
+
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/dialog_ai?createDatabaseIfNotExist=true
+    username: root
+    password: 123456
+  jpa:
+    hibernate:
+      ddl-auto: create-drop  # 开发环境
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:sql/schema.sql
+      data-locations: classpath:sql/data.sql
+```
+
+### 12.2 环境配置策略
+
+#### 12.2.1 开发环境 (dev)
+```yaml
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+```
+
+#### 12.2.2 生产环境 (prod)
+```yaml
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+  sql:
+    init:
+      mode: never
+```
+
+### 12.3 数据库初始化组件
+
+#### 12.3.1 DatabaseInitConfig
+- 数据库连接检查
+- 表结构验证
+- 基础数据检查
+- 健康状态监控
+
+```java
+@Configuration
+public class DatabaseInitConfig {
+    
+    @Bean
+    @Order(1)
+    public CommandLineRunner databaseInitChecker(DataSource dataSource) {
+        return args -> {
+            checkDatabaseConnection(dataSource);
+            checkDatabaseTables(dataSource);
+            checkBasicData(jdbcTemplate);
+        };
+    }
+}
+```
+
+#### 12.3.2 DatabaseInitService
+- 系统配置初始化
+- 默认会话创建
+- 欢迎消息生成
+
+```java
+@Service
+@Order(2)
+public class DatabaseInitService implements CommandLineRunner {
+    
+    @Override
+    public void run(String... args) {
+        initSystemConfigs();
+        initDefaultConversation();
+    }
+}
+```
+
+#### 12.3.3 HealthController
+- 系统健康检查：`GET /api/health`
+- 数据库健康检查：`GET /api/health/database`
+- 业务数据检查：`GET /api/health/business`
+
+### 12.4 表结构设计
+
+#### 12.4.1 核心表
+- `conversations`：会话表，支持状态管理
+- `messages`：消息表，区分用户消息和AI回复
+
+#### 12.4.2 扩展表（预留）
+- `users`：用户管理
+- `conversation_shares`：会话分享
+- `system_configs`：系统配置
+
+#### 12.4.3 表设计原则
+- 使用`utf8mb4`字符集支持emoji
+- 合理设置索引提升查询性能
+- 外键约束保证数据完整性
+- 软删除支持数据恢复
+
+### 12.5 AI代码生成指导
+
+#### 12.5.1 数据库实体生成模板
+```
+请根据以下信息生成一个JPA实体类：
+- 表名：[表名]
+- 业务含义：[业务描述]
+- 字段列表：
+  1. [字段名]：[类型]，[约束]，[说明]
+- 关联关系：[一对多/多对一等关系]
+
+请遵循以下要求：
+- 使用JPA注解
+- 包含审计字段（创建时间、更新时间）
+- 使用Lombok简化代码
+- 提供必要的索引注解
+- 遵循项目命名约定
+```
+
+#### 12.5.2 初始化脚本生成模板
+```
+请根据以下信息生成数据库初始化脚本：
+- 表结构：[表结构描述]
+- 初始数据：[需要插入的数据]
+- 索引策略：[索引设计]
+
+请确保：
+- 使用IF NOT EXISTS避免重复创建
+- 字符集设置为utf8mb4
+- 包含必要的注释
+- 支持幂等执行
+```
+
+### 12.6 最佳实践
+
+#### 12.6.1 启动检查
+- 数据库连接验证
+- 表结构完整性检查
+- 基础数据可用性验证
+- 性能指标监控
+
+#### 12.6.2 错误处理
+- 连接失败重试机制
+- 初始化失败降级策略
+- 详细错误日志记录
+- 健康检查接口监控
+
+#### 12.6.3 性能优化
+- 连接池合理配置
+- 批量操作优化
+- 索引策略调优
+- 查询性能监控
+
+### 12.7 故障排除
+
+#### 12.7.1 常见问题
+1. **数据库连接失败**
+   - 检查MySQL服务状态
+   - 验证连接参数
+   - 确认网络连通性
+
+2. **权限不足**
+   - 确认用户创建数据库权限
+   - 检查用户名密码
+   - 必要时使用管理员账户
+
+3. **字符集问题**
+   - 确保数据库使用utf8mb4
+   - 检查连接URL参数
+   - 验证表字符集配置
+
+#### 12.7.2 监控指标
+- 数据库连接状态
+- 表数据量统计
+- 查询响应时间
+- 错误率监控
+
+通过完善的数据库自动初始化功能，DialogAI项目实现了"开箱即用"的部署体验，大大简化了开发和运维工作。 

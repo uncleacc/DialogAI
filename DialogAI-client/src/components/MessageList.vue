@@ -37,9 +37,9 @@
           @regenerate="$emit('regenerate', message.id)"
         />
         <!-- 调试信息 -->
-        <div v-if="message.role === 'ASSISTANT'" class="debug-info" style="font-size: 12px; color: #666; margin-top: 4px;">
+        <!-- <div v-if="message.role === 'ASSISTANT'" class="debug-info" style="font-size: 12px; color: #666; margin-top: 4px;">
           消息ID: {{ message.id }}, 内容长度: {{ message.content.length }}
-        </div>
+        </div> -->
       </div>
       
       <!-- 加载状态 -->

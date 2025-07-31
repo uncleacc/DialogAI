@@ -2,17 +2,21 @@ server:
   port: 8080
   servlet:
     context-path: /api
-  # 禁用Tomcat的响应缓冲
-  tomcat:
-    connection-timeout: 60000
-    max-connections: 1000
-  # 设置响应压缩相关配置
-  compression:
-    enabled: false # 对于SSE禁用压缩
+  # # 禁用Tomcat的响应缓冲
+  # tomcat:
+  #   connection-timeout: 60000
+  #   max-connections: 1000
+  # # 设置响应压缩相关配置
+  # compression:
+  #   enabled: false # 对于SSE禁用压缩
 
 spring:
   application:
     name: dialog-ai-backend
+  
+  # 环境配置
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   
   # MVC配置 - 禁用异步请求的超时
   mvc:
@@ -21,20 +25,56 @@ spring:
   
   # 数据库配置
   datasource:
-    url: jdbc:mysql://localhost:3306/dialog_ai?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3306/dialog_ai?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
     username: root
     password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 900000
+      maximum-pool-size: 5
+      minimum-idle: 1
+      pool-name: DialogAI-HikariCP
+      auto-commit: true
+      leak-detection-threshold: 30000
+      connection-test-query: SELECT 1
+      validation-timeout: 3000
   
   # JPA配置
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate  # 改为validate模式，避免DDL冲突
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
     show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
         format_sql: true
+        jdbc:
+          batch_size: 20
+          time_zone: Asia/Shanghai
+        order_inserts: true
+        order_updates: true
+        generate_statistics: false
+        connection:
+          provider_disables_autocommit: false
+          handling_mode: DELAYED_ACQUISITION_AND_RELEASE_AFTER_TRANSACTION
+        # 禁用Hibernate的DDL生成
+        hbm2ddl:
+          auto: validate
+    open-in-view: false
+  
+  # SQL初始化配置
+  sql:
+    init:
+      mode: always
+      platform: mysql
+      schema-locations: classpath:sql/schema.sql
+      data-locations: classpath:sql/data.sql
+      continue-on-error: false
+      encoding: UTF-8
   
   # Redis配置
   data:
@@ -55,7 +95,7 @@ spring:
 deepseek:
   api:
     base-url: https://api.deepseek.com
-    api-key: sk-5a3bd97958cf44b0982887bb93a56f06
+    api-key: ${DEEPSEEK_API_KEY:sk-5a3bd97958cf44b0982887bb93a56f06}
     model: deepseek-chat
     timeout: 30000
 
@@ -66,5 +106,8 @@ logging:
     org.springframework.web: INFO
     org.hibernate.SQL: OFF
     org.hibernate.type.descriptor.sql.BasicBinder: OFF
+    # 关闭SQL脚本执行的DEBUG日志
+    org.springframework.jdbc.datasource.init: INFO
+    org.springframework.jdbc: DEBUG
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n" 
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

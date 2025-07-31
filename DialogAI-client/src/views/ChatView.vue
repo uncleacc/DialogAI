@@ -4,9 +4,11 @@
     <Sidebar 
       :conversations="conversations"
       :current-conversation-id="currentConversationId"
+      :is-new-conversation-mode="isNewConversationMode"
       @select-conversation="selectConversation"
       @new-conversation="newConversation"
       @delete-conversation="deleteConversation"
+      @rename-conversation="renameConversation"
     />
     
     <!-- 主聊天区域 -->
@@ -64,6 +66,7 @@ export default {
     const currentMessages = computed(() => chatStore.currentMessages)
     const currentConversationId = computed(() => chatStore.currentConversationId)
     const isLoading = computed(() => chatStore.isLoading)
+    const isNewConversationMode = computed(() => chatStore.isNewConversationMode)
     
     // 方法
     const sendMessage = async (content) => {
@@ -86,9 +89,11 @@ export default {
     
     const newConversation = async () => {
       try {
-        await chatStore.createConversation('新对话')
+        // 使用新的startNewConversation方法，只切换到新会话模式，不立即创建会话
+        chatStore.startNewConversation()
+        console.log('[ChatView] 切换到新会话模式')
       } catch (error) {
-        console.error('创建新会话失败:', error)
+        console.error('启动新会话模式失败:', error)
       }
     }
     
@@ -97,6 +102,14 @@ export default {
         await chatStore.deleteConversation(conversationId)
       } catch (error) {
         console.error('删除会话失败:', error)
+      }
+    }
+
+    const renameConversation = async (conversationId, newName) => {
+      try {
+        await chatStore.renameConversation(conversationId, newName)
+      } catch (error) {
+        console.error('重命名会话失败:', error)
       }
     }
     
@@ -138,10 +151,12 @@ export default {
       currentMessages,
       currentConversationId,
       isLoading,
+      isNewConversationMode,
       sendMessage,
       selectConversation,
       newConversation,
       deleteConversation,
+      renameConversation,
       regenerateMessage,
       testReactiveUpdate,
       testStreamRequest
